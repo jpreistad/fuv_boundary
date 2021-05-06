@@ -11,6 +11,7 @@ from pathlib2 import Path
 import os
 import matplotlib.pyplot as plt
 from pysymmetry.visualization import polarsubplot
+import xarray as xr
 
 
 ll_vs_mlt = lambda mlt: LOWLAT_MIDNIGHT + (LOWLAT_NOON - LOWLAT_MIDNIGHT) * (1 - np.cos(mlt * 2 * np.pi / 24)) / 2 # function that defines the lower latitude boundary
@@ -67,7 +68,7 @@ def load_data(event, datapath, dayglow_method = ('std',), flatfield_issue=True, 
 
 
 def bin_data(wic, LATRES=1, MLTRES=1, LOWLAT_MIDNIGHT=45, LOWLAT_NOON=55, \
-        HIGHLAT=85, INIT=False):
+        HIGHLAT=85, INIT=False, dzalim=70):
     '''
     Copy of the code in 'new_bd_range_improved.py' lines ~91-232.
     LATRES: width in degrees of the latitude binning
@@ -79,6 +80,8 @@ def bin_data(wic, LATRES=1, MLTRES=1, LOWLAT_MIDNIGHT=45, LOWLAT_NOON=55, \
     HIGHLAT: maximum latitude for the latitude binning. Scalar.
     INIT: set to True if the purpose of the binning is to determine
             LOWLAT_NOON/MIDNIGHT for further analysis
+    dzalim: degrees, limit on satellite zenith angle to use. Set pixels with
+            dza>dzalim to nan
 
     '''
 
@@ -114,6 +117,7 @@ def bin_data(wic, LATRES=1, MLTRES=1, LOWLAT_MIDNIGHT=45, LOWLAT_NOON=55, \
         w = wic.isel(date=i) #image i
         mlat = w['mlat'].values.copy().flatten()
         mlt = w['mlt'].values.copy().flatten()
+        w['cimage'] = xr.where(w['dza']>dzalim,np.nan,w['cimage'])
         counts = w['cimage'].values.copy().flatten()
 
         # Grid data and do some proecssing on the gridded data
@@ -210,7 +214,7 @@ def set_boundary(binned_dict, eqb_hist, pb_hist, THRESHOLD=10):
         eqb_index = np.argmax(eqb_hist[i] > THRESHOLD, axis=1) #index of first occirrence avove threshold
         #This way of inferring the indexes fails when the first element along axis=1 is greater than
         # THRESHOLD. This will be flagged as nan below.
-        eqb_i = mlats[eqb_index] #equatorward boundary values
+        eqb_i = mlats[eqb_index] -1 #equatorward boundary values. -1 is experimental
         nans = eqb_index == 0
         eqb_i[nans] = np.nan
         eqb[i,:] = eqb_i
@@ -229,21 +233,26 @@ def set_boundary(binned_dict, eqb_hist, pb_hist, THRESHOLD=10):
 
     return [eqb, pb]
 
-def plot_images_event(wic, binned_dict, eqb_hist, pb_hist, eqb, pb, path):
+def plot_images_event(wic, binned_dict, eqb_hist, pb_hist, eqb, pb, path, dzalim=70):
     '''
     Plot all images in event
     '''
 
     #Create directory
-    my_file = Path(path)
+    my_file = Path(path + '/jone_plots/')
     if not my_file.exists():
-        os.mkdir(path)
+        os.mkdir(path + '/jone_plots/')
+    my_file = Path(path + '/jone_plots/' + path[-10:] + '/')
+    if not my_file.exists():
+        os.mkdir(path + '/jone_plots/' + path[-10:] + '/')
 
     #Plot every image
     n_images = wic.sizes['date'] #number of images in event
     for image in range(n_images):
         img = wic.isel(date=image)
-        title = img['id'].values.tolist() + ': ' + img['date'].dt.strftime('%Y-%m-%d %H:%M:%S').values.tolist()
+        img['cimage'] = xr.where(img['dza']>dzalim,np.nan,img['cimage'])
+        title = img['id'].values.tolist() + ': ' + img['date'].dt.strftime('%Y-%m-%d %H:%M:%S').values.tolist() + '-' + str(image)
+        title = title.replace(':','.')
         #Histogram and intensity profile figure
         fig, axs = plt.subplots(6,4, figsize=(15,10), facecolor='w')
         fig.subplots_adjust(left = 0.09, right = 0.99, top = 0.93, bottom = 0.04, \
@@ -271,7 +280,7 @@ def plot_images_event(wic, binned_dict, eqb_hist, pb_hist, eqb, pb, path):
                 ax.text(1.5,1.15,title, size=16, transform=ax.transAxes)
                 #twin1.legend()
         #plt.show()
-        fig.savefig(path + 'histogram_' + title + '_.png', bbox_inches='tight', dpi = 250)
+        fig.savefig(path + '/jone_plots/' + path[-10:] + '/histogram_' + title + '_.png', bbox_inches='tight', dpi = 250)
 
         #Plpot the image investigated
         fig = plt.figure()
@@ -288,4 +297,4 @@ def plot_images_event(wic, binned_dict, eqb_hist, pb_hist, eqb, pb, path):
         cax = fig.add_axes([0.06, 0.05, 0.9, 0.06])
         plt.colorbar(pax.ax.collections[0],orientation='horizontal',cax=cax, extend='both')
         #plt.show()
-        fig.savefig(path + 'image_' + title + '_.png', bbox_inches='tight', dpi = 250)
+        fig.savefig(path + '/jone_plots/' + path[-10:] + '/image_' + title + '_.png', bbox_inches='tight', dpi = 250)
