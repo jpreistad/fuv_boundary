@@ -105,35 +105,44 @@ def bin_data(wic, LATRES=1, MLTRES=1, LOWLAT_MIDNIGHT=45, LOWLAT_NOON=55, \
         bin_mlt = mltbins[:-1] + MLTRES/2 #bin centre
 
     for i in range(n_images):
-        #Gridding and binning business specific for each image
-        latbins = np.r_[LOWLAT_MIDNIGHT[i]:HIGHLAT+LATRES:LATRES]
-        bin_lat = latbins[:-1] + LATRES/2  #bin centre
-        mlat_centre.append(bin_lat)
-        mltxx, mlatxx = np.meshgrid(bin_mlt, bin_lat, indexing = 'ij')
-        mlt_xx.append(mltxx)
-        mlat_xx.append(mlatxx)
+        if np.isnan(LOWLAT_MIDNIGHT[i]) | np.isnan(LOWLAT_NOON[i]):
+            latbins = np.r_[50:HIGHLAT+LATRES:LATRES]
+            bin_lat = latbins[:-1] + LATRES/2  #bin centre
+            mlat_centre.append(bin_lat)
+            mltxx, mlatxx = np.meshgrid(bin_mlt, bin_lat, indexing = 'ij')
+            mlt_xx.append(mltxx)
+            mlat_xx.append(mlatxx)
+            avg_counts.append(np.zeros([len(bin_mlt),len(bin_lat)]))
+        else:
+            #Gridding and binning business specific for each image
+            latbins = np.r_[LOWLAT_MIDNIGHT[i]:HIGHLAT+LATRES:LATRES]
+            bin_lat = latbins[:-1] + LATRES/2  #bin centre
+            mlat_centre.append(bin_lat)
+            mltxx, mlatxx = np.meshgrid(bin_mlt, bin_lat, indexing = 'ij')
+            mlt_xx.append(mltxx)
+            mlat_xx.append(mlatxx)
 
-        #Extract data from single image
-        w = wic.isel(date=i) #image i
-        mlat = w['mlat'].values.copy().flatten()
-        mlt = w['mlt'].values.copy().flatten()
-        w['cimage'] = xr.where(w['dza']>dzalim,np.nan,w['cimage'])
-        counts = w['cimage'].values.copy().flatten()
+            #Extract data from single image
+            w = wic.isel(date=i) #image i
+            mlat = w['mlat'].values.copy().flatten()
+            mlt = w['mlt'].values.copy().flatten()
+            w['cimage'] = xr.where(w['dza']>dzalim,np.nan,w['cimage'])
+            counts = w['cimage'].values.copy().flatten()
 
-        # Grid data and do some proecssing on the gridded data
-        # use pandas to bin in 2D (this is alternative to the histogram stuff that Anders does)
-        avg_count = pd.Series(counts).groupby([pd.cut(mlt, mltbins), pd.cut(mlat, latbins)]).median()
-        # turn multiindex dataframe into numpy array - the rows will be the latitude profiles
-        avg_count = avg_count.unstack().values
-        # subtract minimum of each row - use nanmin to ignore nans:
-        avg_count = avg_count - np.nanmin(avg_count, axis = 1).reshape((-1, 1))
-        # zero zounts that are below the MLT dependent low latitude boundary
-        avg_count[mlatxx < __ll_vs_mlt(mltxx, LOWLAT_MIDNIGHT=LOWLAT_MIDNIGHT[i], \
-                LOWLAT_NOON=LOWLAT_NOON[i])] = 0
-        # subtract minimum of each row again - use nanmin to ignore nans:
-        avg_count = avg_count - np.nanmin(avg_count, axis = 1).reshape((-1, 1))
-        #avg_counts[:,:,i] = avg_count
-        avg_counts.append(avg_count)
+            # Grid data and do some proecssing on the gridded data
+            # use pandas to bin in 2D (this is alternative to the histogram stuff that Anders does)
+            avg_count = pd.Series(counts).groupby([pd.cut(mlt, mltbins), pd.cut(mlat, latbins)]).median()
+            # turn multiindex dataframe into numpy array - the rows will be the latitude profiles
+            avg_count = avg_count.unstack().values
+            # subtract minimum of each row - use nanmin to ignore nans:
+            avg_count = avg_count - np.nanmin(avg_count, axis = 1).reshape((-1, 1))
+            # zero zounts that are below the MLT dependent low latitude boundary
+            avg_count[mlatxx < __ll_vs_mlt(mltxx, LOWLAT_MIDNIGHT=LOWLAT_MIDNIGHT[i], \
+                    LOWLAT_NOON=LOWLAT_NOON[i])] = 0
+            # subtract minimum of each row again - use nanmin to ignore nans:
+            avg_count = avg_count - np.nanmin(avg_count, axis = 1).reshape((-1, 1))
+            #avg_counts[:,:,i] = avg_count
+            avg_counts.append(avg_count)
 
     binned_dict = {'mlt_centre':bin_mlt, 'mlat_centre':mlat_centre, 'mltxx':mlt_xx, \
             'mlatxx':mlat_xx, 'binned_counts':avg_counts, 'LATRES':LATRES, \
