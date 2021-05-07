@@ -30,7 +30,7 @@ latres = 0.5
 mltres = 1
 highlat = 85
 stepsize = 5 # counts, for building histograms
-thres_hist = 11 #threshold for setting boundary based on histigrams
+thres_hist = 10 #threshold for setting boundary based on histigrams
 ############################
 ############################
 
@@ -62,7 +62,13 @@ eqb_init_hist, pb_init_hist = helpers.make_histogram(init_guess, stepsize=5) #ma
 eqb, pb = helpers.set_boundary(init_guess, eqb_init_hist, pb_init_hist, THRESHOLD=thres_hist) # get boundary
 lowlat_noon = pb[:,2] - 6
 lowlat_midnight = np.mean(eqb[:,[0,4]],axis=1) - 5
-
+# Histogram of boundaries from for the init guess
+fig = plt.figure()
+ax = fig.add_subplot(111)
+ax.hist(lowlat_noon.flatten(), bins=10, label = '\# noon: '+str(sum(~np.isnan(lowlat_noon))), alpha=0.7)
+ax.hist(lowlat_midnight.flatten(), bins=10, label = '\# midnight '+str(sum(~np.isnan(lowlat_midnight))), alpha=0.7)
+ax.text(0.7,0.7, 'THRESHOLD = '+str(thres_hist), color='black', size=10, transform=ax.transAxes)
+ax.legend()
 
 ############################
 # Bin the data according to the parameters determined above
@@ -83,7 +89,7 @@ eqb, pb = helpers.set_boundary(binned_dict, eqb_hist, pb_hist, THRESHOLD=thres_h
 
 ############################
 # Plot all images
-helpers.plot_images_event(wic, binned_dict, eqb_hist, pb_hist, eqb, pb, datapath+event)
+#helpers.plot_images_event(wic, binned_dict, eqb_hist, pb_hist, eqb, pb, datapath+event)
 
 ############################
 # Do some statistis on the boundaries for the events
